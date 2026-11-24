@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forest Strike</title>
+<style>
+  :root { --gold:#ffd152; --blue:#4c8cff; --red:#ff5a48; --panel:rgba(0,0,0,.5); }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; background:#0b140b; font-family:"Segoe UI", Roboto, Arial, sans-serif; color:#fff; user-select:none; }
+  canvas#c { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  .hidden { display:none !important; }
+  .shadow { text-shadow:0 2px 3px rgba(0,0,0,.85); }
+
+  #loading { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; font-size:28px; background:#0b140b; z-index:50; }
+  #loading .bar { width:340px; height:10px; background:#233; border-radius:5px; overflow:hidden; }
+  #loading .bar i { display:block; height:100%; width:0; background:var(--gold); }
+
+  /* ---------- HUD */
+  #hud { position:fixed; inset:0; pointer-events:none; }
+  #top { position:absolute; top:10px; left:50%; transform:translateX(-50%); width:560px; height:100px; background:var(--panel); display:flex; justify-content:space-between; align-items:center; padding:0 22px; border-radius:6px; }
+  #top .team { display:flex; flex-direction:column; gap:4px; min-width:150px; }
+  #top .team.red { align-items:flex-end; }
+  #top .lbl { font-size:18px; font-weight:700; letter-spacing:1px; }
+  #top .blue .lbl { color:var(--blue); } #top .red .lbl { color:var(--red); }
+  #top .score { font-size:40px; font-weight:700; line-height:1; }
+  #top .pips { display:flex; gap:6px; } #top .pips i { width:16px; height:16px; background:#444; display:block; }
+  #top .mid { text-align:center; } #timer { font-size:38px; font-weight:700; } #round { font-size:15px; opacity:.75; letter-spacing:1px; }
+  #radar { position:absolute; left:14px; top:14px; width:260px; height:195px; background:rgba(10,30,10,.6); border-radius:4px; }
+  #feed { position:absolute; right:14px; top:14px; display:flex; flex-direction:column; gap:6px; align-items:flex-end; }
+  #feed div { background:rgba(0,0,0,.5); padding:6px 12px; font-size:17px; border-radius:3px; }
+  #feed .b { color:var(--blue); font-weight:700; } #feed .r { color:var(--red); font-weight:700; } #feed .w { opacity:.8; }
+
+  #cross { position:absolute; left:50%; top:50%; width:0; height:0; --g:6px; }
+  #cross i { position:absolute; background:#79ff8f; box-shadow:0 0 2px #000; }
+  #cross .t,#cross .b { width:3px; height:14px; left:-1.5px; } #cross .l,#cross .r { width:14px; height:3px; top:-1.5px; }
+  #cross .t { bottom:var(--g); } #cross .b { top:var(--g); } #cross .l { right:var(--g); } #cross .r { left:var(--g); }
+  #cross .d { width:3px; height:3px; left:-1.5px; top:-1.5px; }
+  #hit { position:absolute; left:50%; top:50%; width:44px; height:44px; margin:-22px 0 0 -22px; opacity:0; }
+  #hit::before,#hit::after { content:""; position:absolute; left:50%; top:0; width:3px; height:100%; margin-left:-1.5px; background:currentColor;
+    -webkit-mask:linear-gradient(#000 0 32%,transparent 32% 68%,#000 68%); mask:linear-gradient(#000 0 32%,transparent 32% 68%,#000 68%); }
+  #hit::before { transform:rotate(45deg); } #hit::after { transform:rotate(-45deg); }
+  #scope { position:absolute; inset:0; background:radial-gradient(circle at center, transparent 0 46vh, #000 calc(46vh + 1px)); }
+  #scope::before { content:""; position:absolute; left:0; right:0; top:50%; height:1.5px; background:#000; }
+  #scope::after { content:""; position:absolute; top:0; bottom:0; left:50%; width:1.5px; background:#000; }
+  #scope i { position:absolute; left:50%; top:50%; width:5px; height:5px; margin:-2.5px; background:#ff2a14; border-radius:50%; }
+  #dmg { position:absolute; inset:0; box-shadow:inset 0 0 120px 40px rgba(180,0,0,.6); opacity:0; }
+  #dmgdir { position:absolute; width:24px; height:24px; background:#ff2a14; opacity:0; border-radius:3px; }
+
+  #hp { position:absolute; left:18px; bottom:18px; width:330px; height:92px; background:var(--panel); display:flex; align-items:center; gap:14px; padding:0 20px; border-radius:6px; }
+  #hp .plus { font-size:52px; font-weight:900; color:#7dff8a; line-height:1; }
+  #hpv { font-size:46px; font-weight:700; width:90px; }
+  #hp .bar { flex:1; height:12px; background:#333; } #hp .bar i { display:block; height:100%; background:#7dff8a; width:100%; }
+  #ammo { position:absolute; right:18px; bottom:18px; width:380px; height:92px; background:var(--panel); padding:10px 20px; border-radius:6px; }
+  #wname { font-size:20px; } #ammo .nums { position:absolute; right:20px; top:12px; } #mag { font-size:46px; font-weight:700; } #res { font-size:22px; opacity:.75; margin-left:6px; }
+  #astatus { position:absolute; left:20px; bottom:20px; font-size:16px; color:var(--gold); }
+  #ammo .rbar { position:absolute; left:20px; bottom:8px; width:180px; height:5px; background:#333; } #rbar { display:block; height:100%; background:var(--gold); width:0; }
+  #slots { position:absolute; right:22px; bottom:122px; display:flex; flex-direction:column; gap:4px; align-items:flex-end; font-size:18px; }
+  #slots div { padding:3px 10px; opacity:.7; } #slots .on { opacity:1; color:var(--gold); background:rgba(255,209,82,.15); }
+
+  #center { position:absolute; top:16%; left:0; right:0; text-align:center; }
+  #ctitle { font-size:58px; font-weight:800; letter-spacing:2px; } #csub { font-size:22px; margin-top:8px; opacity:.9; }
+  #count { position:absolute; top:36%; left:0; right:0; text-align:center; font-size:72px; font-weight:800; color:var(--gold); }
+  #hints { position:absolute; bottom:132px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.45); padding:12px 26px; text-align:center; font-size:17px; line-height:1.7; border-radius:6px; white-space:nowrap; }
+  #hints .g { color:#9dff9d; }
+  #death { position:absolute; top:60%; left:0; right:0; text-align:center; }
+  #death b { display:block; font-size:40px; color:#ff6a5a; } #death span { font-size:22px; }
+  #spec { position:absolute; bottom:120px; left:0; right:0; text-align:center; font-size:22px; }
+  #board { position:absolute; left:50%; top:52%; transform:translate(-50%,-50%); width:720px; background:rgba(0,0,0,.78); padding:24px 36px; border-radius:8px; }
+  #board h2 { margin:0 0 16px; text-align:center; font-size:32px; }
+  #board table { width:100%; border-collapse:collapse; font-size:21px; } #board td { padding:6px 4px; } #board td.n { text-align:center; width:120px; }
+  #board .th td { opacity:.65; font-size:16px; } #board .tm td { padding-top:12px; font-weight:700; }
+  #board .me td { color:var(--gold); }
+
+  /* ---------- menus */
+  .screen { position:fixed; inset:0; display:flex; pointer-events:auto; }
+  button { font:inherit; cursor:pointer; color:#fff; border:none; }
+  .btn { display:block; width:100%; height:68px; margin:0 0 16px; font-size:24px; font-weight:600; letter-spacing:1px; background:rgba(18,34,18,.88); border-bottom:4px solid #5a7a50; }
+  .btn:hover { background:rgba(50,86,44,.95); border-bottom-color:var(--gold); }
+  .btn.accent { background:#d89a1c; border-bottom-color:#ffe08a; color:#1b1404; }
+  .btn.accent:hover { background:#f2b330; }
+  #menu .side { width:520px; margin-left:60px; height:100%; background:rgba(0,10,0,.68); border-right:5px solid #d99a26; padding:60px 70px; display:flex; flex-direction:column; }
+  #menu h1 { margin:0; font-size:78px; line-height:.95; font-weight:900; letter-spacing:3px; }
+  #menu h1 .a { color:#8fd66b; } #menu h1 .b { color:#ffbf3f; }
+  #menu .sub { margin:14px 0 46px; font-size:20px; opacity:.8; }
+  #menu .info { margin-top:auto; font-size:18px; line-height:1.6; text-align:center; opacity:.9; }
+  #menu .info .b { color:#8db4ff; } #menu .info .r { color:#ff9a8a; }
+  .center { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.6); pointer-events:auto; }
+  .card { width:820px; max-width:94vw; background:rgba(6,18,6,.96); padding:30px 46px 36px; border-radius:8px; }
+  .card h2 { margin:0 0 26px; text-align:center; color:var(--gold); font-size:40px; }
+  .row { display:flex; align-items:center; background:rgba(255,255,255,.06); margin-bottom:14px; padding:10px 18px; font-size:22px; }
+  .row .l { flex:1; } .row .v { width:190px; text-align:center; color:var(--gold); font-weight:600; }
+  .row button { width:54px; height:54px; font-size:28px; background:rgba(18,34,18,.9); border-bottom:3px solid #5a7a50; }
+  .row button:hover { border-bottom-color:var(--gold); background:rgba(50,86,44,.95); }
+  #pause .col { width:520px; text-align:center; } #pause h2 { font-size:56px; color:var(--gold); margin:0 0 30px; }
+  #pause .hint { opacity:.7; font-size:18px; }
+  #matchend { position:fixed; left:0; right:0; bottom:40px; display:flex; justify-content:center; gap:30px; pointer-events:auto; }
+  #matchend .btn { width:380px; }
+  #clickhint { position:fixed; left:50%; top:46%; transform:translate(-50%,-50%); background:rgba(0,0,0,.7); padding:18px 30px; font-size:24px; border-radius:6px; pointer-events:auto; cursor:pointer; }
+</style>
+</head>
+<body>
+<div id="loading"><div>FOREST STRIKE</div><div class="bar"><i id="loadbar"></i></div><div id="loadtxt" style="font-size:18px;opacity:.7">загрузка…</div></div>
+<canvas id="c"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="scope" class="hidden"><i></i></div>
+  <div id="dmg"></div><div id="dmgdir"></div>
+  <div id="top" class="shadow">
+    <div class="team blue"><span class="lbl">СИНИЕ</span><span class="score" id="sb">0</span><div class="pips" id="pb"><i></i><i></i></div></div>
+    <div class="mid"><div id="timer">0:00</div><div id="round">РАУНД 1</div></div>
+    <div class="team red"><span class="lbl">КРАСНЫЕ</span><span class="score" id="sr">0</span><div class="pips" id="pr"><i></i><i></i></div></div>
+  </div>
+  <canvas id="radar" width="320" height="240"></canvas>
+  <div id="feed" class="shadow"></div>
+  <div id="cross"><i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i><i class="d"></i></div>
+  <div id="hit"></div>
+  <div id="hp" class="shadow"><span class="plus">+</span><span id="hpv">100</span><div class="bar"><i id="hpbar"></i></div></div>
+  <div id="ammo" class="shadow"><div id="wname">Винтовка</div><div class="nums"><span id="mag">30</span><span id="res">/ 90</span></div><div id="astatus"></div><div class="rbar"><i id="rbar"></i></div></div>
+  <div id="slots" class="shadow"></div>
+  <div id="center" class="shadow"><div id="ctitle"></div><div id="csub"></div></div>
+  <div id="count" class="shadow"></div>
+  <div id="hints" class="shadow">
+    WASD — движение &nbsp; ЛКМ — огонь &nbsp; ПКМ — прицел &nbsp; R — перезарядка &nbsp; Пробел — прыжок<br>
+    1 / 2 / 3 / Q — оружие &nbsp; C — присесть &nbsp; Shift — тихий шаг &nbsp; Tab — счёт &nbsp; Esc — пауза<br>
+    <span class="g">Кусты скрывают тебя от ботов, пока ты не стреляешь. Бег слышно, тихий шаг — нет.</span>
+  </div>
+  <div id="death" class="shadow hidden"><b>ВЫ ПОГИБЛИ</b><span id="killer"></span></div>
+  <div id="spec" class="shadow"></div>
+  <div id="board" class="hidden"></div>
+</div>
+
+<div id="menu" class="screen hidden">
+  <div class="side shadow">
+    <h1><span class="a">FOREST</span><br><span class="b">STRIKE</span></h1>
+    <div class="sub">шутер 2 на 2 &nbsp;•&nbsp; карта «Лес»</div>
+    <button class="btn accent" data-act="play">ИГРАТЬ</button>
+    <button class="btn" data-act="settings">НАСТРОЙКИ</button>
+    <div class="info"><span class="b">Ты и бот-напарник (синие)</span><br><span class="r">против двух ботов (красные)</span><br><span id="menuinfo"></span></div>
+  </div>
+</div>
+
+<div id="settings" class="center hidden">
+  <div class="card">
+    <h2>НАСТРОЙКИ</h2>
+    <div class="row"><span class="l">Чувствительность мыши</span><button data-set="sens" data-d="-1">‹</button><span class="v" id="v-sens"></span><button data-set="sens" data-d="1">›</button></div>
+    <div class="row"><span class="l">Сложность ботов</span><button data-set="diff" data-d="-1">‹</button><span class="v" id="v-diff"></span><button data-set="diff" data-d="1">›</button></div>
+    <div class="row"><span class="l">Раундов до победы</span><button data-set="rounds" data-d="-1">‹</button><span class="v" id="v-rounds"></span><button data-set="rounds" data-d="1">›</button></div>
+    <div class="row"><span class="l">Громкость</span><button data-set="vol" data-d="-1">‹</button><span class="v" id="v-vol"></span><button data-set="vol" data-d="1">›</button></div>
+    <div class="row"><span class="l">Графика</span><button data-set="gfx" data-d="-1">‹</button><span class="v" id="v-gfx"></span><button data-set="gfx" data-d="1">›</button></div>
+    <button class="btn accent" data-act="back" style="width:340px;margin:24px auto 0">НАЗАД</button>
+  </div>
+</div>
+
+<div id="pause" class="center hidden">
+  <div class="col shadow">
+    <h2>ПАУЗА</h2>
+    <button class="btn accent" data-act="resume">ПРОДОЛЖИТЬ</button>
+    <button class="btn" data-act="settings">НАСТРОЙКИ</button>
+    <button class="btn" data-act="restart">НАЧАТЬ ЗАНОВО</button>
+    <button class="btn" data-act="mainmenu">В ГЛАВНОЕ МЕНЮ</button>
+    <div class="hint">Esc — открыть паузу во время игры</div>
+  </div>
+</div>
+
+<div id="matchend" class="hidden">
+  <button class="btn accent" data-act="again">ЕЩЁ МАТЧ</button>
+  <button class="btn" data-act="mainmenu">В ГЛАВНОЕ МЕНЮ</button>
+</div>
+<div id="clickhint" class="hidden">Кликни, чтобы вернуться в игру</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module" src="game.js"></script>
+</body>
+</html>
